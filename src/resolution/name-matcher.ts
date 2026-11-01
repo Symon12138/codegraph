@@ -24,6 +24,7 @@ import { cppIncludedFile, cppIncludedHeadersBeside, cppIncluders } from './cpp-i
 import { isCFeatureVariant, isOffByDefault } from './c-feature-variants';
 import { isTestFile, isTestPath } from '../search/query-utils';
 import { ambientModuleDeclarations, declaringFileAnswers, inBlock, isDeclarationFile, isMergedAmbientDeclaration, scanGlobalScope, type GlobalScopeScan } from './ambient-modules';
+import { leavesWorkspaceRoot } from './workspace-packages';
 import { isMinifiedContent } from '../extraction/generated-detection';
 import { getCargoWorkspaceCrateMap, parsePackageName, parseTargetPaths } from './frameworks/cargo-workspace';
 import { blankRustCode, readRustScopes, rustBindingAt, rustInnerBlockAt, rustBoundsOf, rustFnAt, rustImplAt, splitRustTopLevel, type RustBinding, type RustPatternSite, type RustScopes } from './rust-scopes';
@@ -2053,6 +2054,17 @@ function isTsTypeInScope(n: Node, ref: UnresolvedRef, context: ResolutionContext
   const declaration = isDeclarationFile(n.filePath) || (isFlowLibrary(n.filePath, scope) && !/\.[cm]?tsx?$/i.test(ref.filePath));
   if ((scope.script && !declaration) || (isTestFile(n.filePath) && !isTestFile(ref.filePath))) return false;
   return scope.globalWords.has(`${n.startLine}:${n.startColumn}`);
+}
+
+/**
+ * Whether a name in a JS/TS monorepo inside the repository would reach past it:
+ * it has an install of its own (WorkspacePackages.nestedRoots). The tests of
+ * react's `compiler/` call `@types/jest`'s `expect`, not the `declare function
+ * expect` of the outer repository's `scripts/jest`.
+ */
+export function crossesWorkspaceRoot(n: Node, ref: UnresolvedRef, context: ResolutionContext): boolean {
+  return JS_FAMILY.has(ref.language) && JS_FAMILY.has(n.language) &&
+    leavesWorkspaceRoot(ref.filePath, n.filePath, context.getWorkspacePackages?.());
 }
 
 /**
